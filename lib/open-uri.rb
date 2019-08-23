@@ -207,7 +207,7 @@ module OpenURI
     uri_set = {}
     buf = nil
     while true
-      redirect = catch(:open_uri_redirect) {
+      redirect, cookie = catch(:open_uri_redirect) {
         buf = Buffer.new
         uri.buffer_open(buf, find_proxy.call(uri), options)
         nil
@@ -229,9 +229,13 @@ module OpenURI
           options = options.dup
           options.delete :http_basic_authentication
         end
+        if cookie
+          options = options.dup
+          options[:cookie] = cookie.split(';')[0]
+        end
         uri = redirect
-        raise "HTTP redirection loop: #{uri}" if uri_set.include? uri.to_s
-        uri_set[uri.to_s] = true
+        raise "HTTP redirection loop: #{uri}" if uri_set.include?([uri.to_s, !!cookie])
+        uri_set[[uri.to_s, !!cookie]] = true
       else
         break
       end
@@ -321,6 +325,9 @@ module OpenURI
 
     resp = nil
     http.start {
+      if cookie = options[:cookie]
+        header['Cookie'] = cookie
+      end
       req = Net::HTTP::Get.new(request_uri, header)
       if options.include? :http_basic_authentication
         user, pass = options[:http_basic_authentication]
@@ -359,7 +366,7 @@ module OpenURI
       rescue URI::InvalidURIError
         raise OpenURI::HTTPError.new(io.status.join(' ') + ' (Invalid Location URI)', io)
       end
-      throw :open_uri_redirect, loc_uri
+      throw :open_uri_redirect, [loc_uri, resp['Set-Cookie']]
     else
       raise OpenURI::HTTPError.new(io.status.join(' '), io)
     end
