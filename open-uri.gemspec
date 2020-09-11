@@ -1,8 +1,6 @@
-require_relative 'lib/open/uri/version'
-
 Gem::Specification.new do |spec|
   spec.name          = "open-uri"
-  spec.version       = Open::Uri::VERSION
+  spec.version       = "0.1.0"
   spec.authors       = ["Hiroshi SHIBATA"]
   spec.email         = ["hsbt@ruby-lang.org"]
 
