@@ -1,8 +1,6 @@
-# Open::Uri
+# OpenURI
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/open/uri`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+OpenURI is an easy-to-use wrapper for Net::HTTP, Net::HTTPS and Net::FTP.
 
 ## Installation
 
@@ -22,7 +20,13 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+It is possible to open an http, https or ftp URL as though it were a file:
+
+```ruby
+URI.open("http://www.ruby-lang.org/") {|f|
+  f.each_line {|line| p line}
+}
+```
 
 ## Development
 
@@ -32,5 +36,5 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/hsbt/open-uri.
+Bug reports and pull requests are welcome on GitHub at https://github.com/ruby/open-uri.
 
