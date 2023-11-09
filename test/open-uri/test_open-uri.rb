@@ -558,6 +558,17 @@ class TestOpenURI < Test::Unit::TestCase
     }
   end
 
+  def test_redirect_cookie
+    with_http {|srv, dr, url|
+      srv.mount_proc("/r1/") {|req, res| res.status = 301; res['set-cookie'] = "cookie-name=cookie-value"; res["location"] = "#{url}/r2"; res.body = "r1" }
+      srv.mount_proc("/r2/") {|req, res| res.body = req['Cookie'] }
+      URI.open("#{url}/r1/") {|f|
+        assert_equal("#{url}/r2", f.base_uri.to_s)
+        assert_equal('cookie-name=cookie-value', f.read)
+      }
+    }
+  end
+
   def test_userinfo
     assert_raise(ArgumentError) { URI.open("http://user:pass@127.0.0.1/") {} }
   end
