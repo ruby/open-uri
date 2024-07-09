@@ -215,17 +215,28 @@ class SimpleHTTPProxyServer
     client.puts "HTTP/1.1 200 Connection Established\r\n\r\n"
     @access_log << "CONNECT #{path} \n"
     begin
-      while fds = IO.select([client, backend])
+      loop do
+        fds = IO.select([client, backend])
         if fds[0].include?(client)
-          data = client.readpartial(1024)
-          backend.write(data)
-        elsif fds[0].include?(backend)
-          data = backend.readpartial(1024)
-          client.write(data)
+          begin
+            data = client.readpartial(1024)
+            backend.write(data)
+          rescue EOFError
+            break
+          end
+        end
+        if fds[0].include?(backend)
+          begin
+            data = backend.readpartial(1024)
+            client.write(data)
+          rescue EOFError
+            break
+          end
         end
       end
-    rescue
+    ensure
       backend.close
+      client.close
     end
   end
 
