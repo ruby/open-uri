@@ -232,12 +232,15 @@ module OpenURI
         unless OpenURI.redirectable?(uri, redirect)
           raise "redirection forbidden: #{uri} -> #{redirect}"
         end
-        if options.include?(:http_basic_authentication) ||
-           options.include?("Authorization")
-          # send authentication and Authorization only for the URI directly specified.
+        if options.include? :http_basic_authentication
+          # send authentication only for the URI directly specified.
           options = options.dup
           options.delete :http_basic_authentication
-          options.delete "Authorization"
+        end
+        if !(uri.scheme == redirect.scheme && uri.host == redirect.host && uri.port == redirect.port)
+          # Remove authorization when redirect to another origin.
+          options = options.dup
+          options.delete_if {|key, value| key.to_s.downcase == "authorization" }
         end
         uri = redirect
         raise "HTTP redirection loop: #{uri}" if uri_set.include? uri.to_s
