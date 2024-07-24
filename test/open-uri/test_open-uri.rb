@@ -232,6 +232,34 @@ class TestOpenURI < Test::Unit::TestCase
     }
   end
 
+  def test_redirect_to_same_origin_with_authorization_header
+    authorization_header = "dummy_token"
+    redirected_authorization_header = "exposed_dummy_token"
+    with_http {|srv, url|
+      srv.mount_proc("/r1/", lambda {|req, res| res.status = 301; res["location"] = "#{url}/r2" } )
+      srv.mount_proc("/r2/", lambda {|req, res| redirected_authorization_header = req["Authorization"]; } )
+      URI.open("#{url}/r1/", "Authorization" => authorization_header) {|f|
+        assert_equal("#{url}/r2", f.base_uri.to_s)
+        assert_equal(authorization_header, redirected_authorization_header)
+      }
+    }
+  end
+
+  def test_redirect_to_another_origin_with_authorization_header
+    authorization_header = "dummy_token"
+    redirected_authorization_header = "exposed_dummy_token"
+    with_http {|srv1, url1|
+      with_http {|srv2, url2|
+        srv1.mount_proc("/r1/", lambda {|req, res| res.status = 301; res["location"] = "#{url2}/r2" } )
+        srv2.mount_proc("/r2/", lambda {|req, res| redirected_authorization_header = req["Authorization"]; } )
+        URI.open("#{url1}/r1/", "Authorization" => authorization_header) {|f|
+          assert_equal("#{url2}/r2", f.base_uri.to_s)
+          assert_equal(nil, redirected_authorization_header)
+        }
+      }
+    }
+  end
+
   def test_redirect_relative
     TCPServer.open("127.0.0.1", 0) {|serv|
       port = serv.addr[1]

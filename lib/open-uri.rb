@@ -237,6 +237,11 @@ module OpenURI
           options = options.dup
           options.delete :http_basic_authentication
         end
+        if !(uri.scheme == redirect.scheme && uri.host == redirect.host && uri.port == redirect.port)
+          # Remove authorization when redirect to another origin.
+          options = options.dup
+          options.delete_if {|key, value| key.to_s.downcase == "authorization" }
+        end
         uri = redirect
         raise "HTTP redirection loop: #{uri}" if uri_set.include? uri.to_s
         uri_set[uri.to_s] = true
