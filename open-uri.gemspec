@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
   spec.summary       = %q{An easy-to-use wrapper for Net::HTTP, Net::HTTPS and Net::FTP.}
   spec.description   = %q{An easy-to-use wrapper for Net::HTTP, Net::HTTPS and Net::FTP.}
   spec.homepage      = "https://github.com/ruby/open-uri"
-  spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
+  spec.required_ruby_version = Gem::Requirement.new(">= 2.5.0")
   spec.licenses      = ["Ruby", "BSD-2-Clause"]
 
   spec.metadata["homepage_uri"] = spec.homepage
