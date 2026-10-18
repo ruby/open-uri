@@ -68,6 +68,46 @@ class TestOpenURIFtp < Test::Unit::TestCase
       }
     end
 
+    def test_ftp_percent_encoded_userinfo
+      TCPServer.open("127.0.0.1", 0) {|serv|
+        _, port, _, host = serv.addr
+        th = Thread.new {
+          s = serv.accept
+          begin
+            s.print "220 Test FTP Server\r\n"
+            assert_equal("USER us@er\r\n", s.gets); s.print "331 name ok\r\n"
+            assert_equal("PASS p:a%s+s\r\n", s.gets); s.print "230 logged in\r\n"
+            assert_equal("TYPE I\r\n", s.gets); s.print "200 type set to I\r\n"
+            assert_equal("PASV\r\n", s.gets)
+            TCPServer.open("127.0.0.1", 0) {|data_serv|
+              _, data_serv_port, _, _ = data_serv.addr
+              hi = data_serv_port >> 8
+              lo = data_serv_port & 0xff
+              s.print "227 Entering Passive Mode (127,0,0,1,#{hi},#{lo}).\r\n"
+              assert_equal("RETR bar\r\n", s.gets); s.print "150 file okay\r\n"
+              data_sock = data_serv.accept
+              begin
+                data_sock << "content"
+              ensure
+                data_sock.close
+              end
+              s.print "226 transfer complete\r\n"
+              assert_nil(s.gets)
+            }
+          ensure
+            s.close if s
+          end
+        }
+        begin
+          content = URI("ftp://us%40er:p:a%25s+s@#{host}:#{port}/bar").read
+          assert_equal("content", content)
+        ensure
+          Thread.kill(th)
+          th.join
+        end
+      }
+    end
+
     def test_ftp_active
       TCPServer.open("127.0.0.1", 0) {|serv|
         _, port, _, host = serv.addr

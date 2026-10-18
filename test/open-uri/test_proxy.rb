@@ -171,4 +171,33 @@ class TestOpenURIProxy < Test::Unit::TestCase
       assert_equal("", proxy_log.string)
     }
   end
+  def test_authenticated_proxy_with_percent_encoded_userinfo
+    with_http {|srv, url|
+      proxy_log = StringIO.new(''.dup)
+      proxy_access_log = StringIO.new(''.dup)
+      proxy_auth_log = ''.dup
+      proxy_host = '127.0.0.1'
+      proxy = SimpleHTTPProxyServer.new(proxy_host, 0, lambda {|req, res|
+          proxy_auth_log << req.request_line
+          if req["Proxy-Authorization"] != "Basic #{['us@er:p:a%s+s'].pack('m0')}"
+            raise ProxyAuthenticationRequired
+          end
+      }, proxy_log, proxy_access_log)
+      proxy_port = proxy.instance_variable_get(:@server).addr[1]
+      proxy_url = "http://us%40er:p:a%25s+s@#{proxy_host}:#{proxy_port}/"
+      begin
+        th = proxy.start
+        srv.mount_proc("/proxy", lambda { |req, res| res.body = "proxy" } )
+        URI.open("#{url}/proxy", :proxy => proxy_url) {|f|
+          assert_equal("200", f.status[0])
+          assert_equal("proxy", f.read)
+        }
+        assert_match(/#{Regexp.quote url}/, proxy_auth_log); proxy_auth_log.clear
+      ensure
+        proxy.shutdown
+        th.join
+      end
+      assert_equal("", proxy_log.string)
+    }
+  end
 end
