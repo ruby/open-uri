@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 require 'uri'
 require 'stringio'
-require 'time'
 
 module URI
   # Allows the opening of various resources including URIs. Example:
@@ -528,6 +527,10 @@ module OpenURI
     # returns a Time that represents the Last-Modified field.
     def last_modified
       if vs = @metas['last-modified']
+        # Time.httpdate is the only thing open-uri uses from the time library,
+        # and this accessor is the only caller. Loading it here keeps it off
+        # the require path for everyone who just reads a URL.
+        require 'time'
         v = vs.join(', ')
         Time.httpdate(v)
       else
