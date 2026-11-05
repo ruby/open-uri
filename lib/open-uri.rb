@@ -283,6 +283,13 @@ module OpenURI
     (/\A(?:http|ftp)\z/i =~ uri1.scheme && /\A(?:https?|ftp)\z/i =~ uri2.scheme)
   end
 
+  # Splits +userinfo+ into a user and a password at the first ":" and
+  # percent-decodes both, so credentials such as "p%40ss" are sent as "p@ss".
+  # Unlike form decoding, "+" is kept as is.
+  def OpenURI.split_userinfo(userinfo) # :nodoc:
+    userinfo.split(':', 2).map {|s| URI.decode_www_form_component(s.gsub('+', '%2B')) }
+  end
+
   def OpenURI.open_http(buf, target, proxy, options) # :nodoc:
     if proxy
       proxy_uri, proxy_user, proxy_pass = proxy
@@ -302,7 +309,7 @@ module OpenURI
       # HTTP or HTTPS
       if proxy
         unless proxy_user && proxy_pass
-          proxy_user, proxy_pass = proxy_uri.userinfo.split(':') if proxy_uri.userinfo
+          proxy_user, proxy_pass = OpenURI.split_userinfo(proxy_uri.userinfo) if proxy_uri.userinfo
         end
         if proxy_user && proxy_pass
           klass = Net::HTTP::Proxy(proxy_uri.hostname, proxy_uri.port, proxy_user, proxy_pass)
@@ -879,7 +886,7 @@ module URI
       # todo: extract user/passwd from .netrc.
       user = 'anonymous'
       passwd = nil
-      user, passwd = self.userinfo.split(/:/) if self.userinfo
+      user, passwd = OpenURI.split_userinfo(self.userinfo) if self.userinfo
       ftp.login(user, passwd)
       directories.each {|cwd|
         ftp.voidcmd("CWD #{cwd}")
