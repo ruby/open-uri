@@ -97,6 +97,10 @@ module OpenURI
   # The version string
   VERSION = "0.5.0"
 
+  # Request header field names (lowercase) that carry credentials and must not
+  # be forwarded to a different origin when following a redirect.
+  SENSITIVE_HEADERS = %w[authorization cookie proxy-authorization].freeze # :nodoc:
+
   # The default options
   Options = {
     :proxy => true,
@@ -250,14 +254,21 @@ module OpenURI
         unless OpenURI.redirectable?(uri, redirect)
           raise "redirection forbidden: #{uri} -> #{redirect}"
         end
-        if options.include? :http_basic_authentication
-          # send authentication only for the URI directly specified.
-          options = options.dup
-          options.delete :http_basic_authentication
-        end
-        if options.include?(:request_specific_fields) && options[:request_specific_fields].is_a?(Hash)
-          # Send request specific headers only for the initial request.
-          options.delete :request_specific_fields
+        # These options are scoped to the URI the caller specified; do not
+        # carry them across the redirect.  options is dup'd so the caller's
+        # Hash is never mutated.
+        options = options.dup
+        # send authentication only for the URI directly specified.
+        options.delete :http_basic_authentication
+        # Send request specific headers only for the initial request.
+        options.delete(:request_specific_fields) if options[:request_specific_fields].is_a?(Hash)
+        unless OpenURI.same_origin?(uri, redirect)
+          # Do not forward credential-bearing headers supplied by the caller to
+          # a different origin (scheme, host, or port).  Otherwise an attacker
+          # who controls the redirect target (for example via an open redirect
+          # on the intended host) could capture the caller's Authorization or
+          # Cookie.  Same-origin redirects keep these headers, as before.
+          options.reject! {|k, _| String === k && SENSITIVE_HEADERS.include?(k.downcase) }
         end
         uri = redirect
         raise "HTTP redirection loop: #{uri}" if uri_set.include? uri.to_s
@@ -281,6 +292,15 @@ module OpenURI
     # However this is ad hoc.  It should be extensible/configurable.
     uri1.scheme.downcase == uri2.scheme.downcase ||
     (/\A(?:http|ftp)\z/i =~ uri1.scheme && /\A(?:https?|ftp)\z/i =~ uri2.scheme)
+  end
+
+  # Whether +uri1+ and +uri2+ share the same origin (scheme, host and port),
+  # per RFC 6454.  Used to decide whether credential-bearing headers may be
+  # forwarded when following a redirect.
+  def OpenURI.same_origin?(uri1, uri2) # :nodoc:
+    uri1.scheme.to_s.downcase == uri2.scheme.to_s.downcase &&
+      uri1.hostname.to_s.downcase == uri2.hostname.to_s.downcase &&
+      uri1.port == uri2.port
   end
 
   def OpenURI.open_http(buf, target, proxy, options) # :nodoc:

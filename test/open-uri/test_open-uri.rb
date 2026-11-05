@@ -399,6 +399,62 @@ class TestOpenURI < Test::Unit::TestCase
     }
   end
 
+  def test_redirect_different_origin_strips_credential_headers
+    log = []
+    srv_a = SimpleHTTPServer.new("127.0.0.1", 0, log)
+    srv_b = SimpleHTTPServer.new("127.0.0.1", 0, log)
+    port_a = srv_a.instance_variable_get(:@server).addr[1]
+    port_b = srv_b.instance_variable_get(:@server).addr[1]
+    received = {}
+    srv_a.mount_proc("/r1/", lambda {|req, res|
+      res.status = 301
+      res["location"] = "http://127.0.0.1:#{port_b}/r2"
+    })
+    srv_b.mount_proc("/r2/", lambda {|req, res|
+      received[:authorization] = req["Authorization"]
+      received[:cookie] = req["Cookie"]
+      res.body = "r2"
+    })
+    srv_a.start
+    srv_b.start
+    begin
+      URI.open("http://127.0.0.1:#{port_a}/r1/",
+               "Authorization" => "Bearer dummy_token",
+               "Cookie" => "session=secret") {|f|
+        assert_equal("r2", f.read)
+      }
+    ensure
+      srv_a.shutdown
+      srv_b.shutdown
+    end
+    assert_equal([], log)
+    assert_nil(received[:authorization],
+               "Authorization must not be forwarded to a different origin on redirect")
+    assert_nil(received[:cookie],
+               "Cookie must not be forwarded to a different origin on redirect")
+  end
+
+  def test_redirect_same_origin_forwards_credential_headers
+    redirected_authorization_header = nil
+    with_http {|srv, url|
+      srv.mount_proc("/r1/", lambda {|req, res| res.status = 301; res["location"] = "#{url}/r2" } )
+      srv.mount_proc("/r2/", lambda {|req, res| redirected_authorization_header = req["Authorization"]; res.body = "r2" } )
+      URI.open("#{url}/r1/", "Authorization" => "dummy_token") {|f|
+        assert_equal("r2", f.read)
+      }
+    }
+    assert_equal("dummy_token", redirected_authorization_header,
+                 "same-origin redirects must still forward caller headers")
+  end
+
+  def test_same_origin
+    assert_equal(true,  OpenURI.same_origin?(URI("http://example.com/a"),  URI("http://example.com/b")))
+    assert_equal(true,  OpenURI.same_origin?(URI("http://example.com/a"),  URI("http://EXAMPLE.com/b")))
+    assert_equal(false, OpenURI.same_origin?(URI("http://example.com/a"),  URI("http://evil.com/a")))   # host
+    assert_equal(false, OpenURI.same_origin?(URI("http://example.com:1/"), URI("http://example.com:2/"))) # port
+    assert_equal(false, OpenURI.same_origin?(URI("http://example.com/a"),  URI("https://example.com/a"))) # scheme
+  end
+
   def test_max_redirects_success
     with_http {|srv, url|
       srv.mount_proc("/r1/", lambda {|req, res| res.status = 301; res["location"] = "#{url}/r2"; res.body = "r1" } )
