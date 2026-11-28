@@ -268,6 +268,41 @@ class TestOpenURI < Test::Unit::TestCase
     }
   end
 
+  def test_redirect_non_ascii_location
+    TCPServer.open("127.0.0.1", 0) {|serv|
+      port = serv.addr[1]
+      th = Thread.new {
+        sock = serv.accept
+        begin
+          req = sock.gets("\r\n\r\n")
+          assert_match(%r{\AGET /foo/bar }, req)
+          sock.print "HTTP/1.0 301 Moved Permanently\r\n"
+          # Raw UTF-8 in the Location field, which URI cannot parse as given.
+          sock.print "Location: /caf\xC3\xA9\r\n\r\n"
+        ensure
+          sock.close
+        end
+        sock = serv.accept
+        begin
+          req = sock.gets("\r\n\r\n")
+          assert_match(%r{\AGET /caf%C3%A9 }, req)
+          sock.print "HTTP/1.0 200 OK\r\n"
+          sock.print "Content-Length: 2\r\n\r\n"
+          sock.print "ab"
+        ensure
+          sock.close
+        end
+      }
+      begin
+        content = URI("http://127.0.0.1:#{port}/foo/bar").read
+        assert_equal("ab", content)
+      ensure
+        Thread.kill(th)
+        th.join
+      end
+    }
+  end
+
   def test_redirect_invalid
     TCPServer.open("127.0.0.1", 0) {|serv|
       port = serv.addr[1]

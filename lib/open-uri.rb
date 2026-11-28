@@ -391,7 +391,15 @@ module OpenURI
       begin
         loc_uri = URI.parse(resp['location'])
       rescue URI::InvalidURIError
-        raise OpenURI::HTTPError.new(io.status.join(' ') + ' (Invalid Location URI)', io)
+        # A Location field may hold raw non-ASCII bytes, which URI cannot
+        # parse. Browsers percent encode them and follow the redirect rather
+        # than give up, so escape those bytes and try once more.
+        escaped = resp['location'].b.gsub(/[^\x21-\x7e]/n) {|byte| "%%%02X" % byte.ord}
+        begin
+          loc_uri = URI.parse(escaped)
+        rescue URI::InvalidURIError
+          raise OpenURI::HTTPError.new(io.status.join(' ') + ' (Invalid Location URI)', io)
+        end
       end
       throw :open_uri_redirect, loc_uri
     else
